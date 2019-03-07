@@ -83,7 +83,7 @@ int main(int argc, char *argv [])
     {
         //Iðvalomas buferis ir kliento adreso struktûra
         memset(&clientaddr, 0, sizeof(clientaddr));
-        memset(&buffer, 0, sizeof(buffer));
+        memset(&buffer, '\n', sizeof(buffer));
 
         //Waiting for connections
         clientaddrlen = sizeof(struct sockaddr);

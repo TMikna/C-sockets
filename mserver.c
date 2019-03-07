@@ -11,7 +11,7 @@ Tomas Mikna
 #include <unistd.h>
 #include <stdbool.h>
 
-#define BUFFLEN 1024
+#define BUFFLEN 100
 #define MAXCLIENTS 10
 
 struct Client
@@ -215,6 +215,10 @@ int my_accept (struct Client *cli)
             cli->connected = true;
             FD_ZERO(&cli->fdset);
             FD_SET(cli->c_socket, &cli->fdset);
+
+            unsigned long b=1;
+            ioctlsocket(cli -> c_socket,FIONBIO,&b);
+
             return true;
         }
         return false;
@@ -222,7 +226,7 @@ int my_accept (struct Client *cli)
 
 int my_send(struct Client *cli, char *buffer, int sz)
 {
-    if (send(cli->c_socket,buffer,sz,0) != 0);
+    if (send(cli->c_socket,buffer,sz,0) > 0);
         return true;
     disconnect(cli);
     return false;
@@ -230,14 +234,34 @@ int my_send(struct Client *cli, char *buffer, int sz)
 
 int my_recv(struct Client *cli, char *buffer, int sz)
 {
+
+    int res;
+    printf ("ERROR 1, res = %d\n", res);
 	if(FD_ISSET(cli->c_socket,&cli->fdset))
 	{
-		if (recv(cli->c_socket,buffer,sz,0) != 0)
+        res = recv(cli->c_socket, buffer, sizeof(buffer), 0);
+        int errCode = WSAGetLastError();
+
+        fprintf (stderr, "WSAGetLastError errCode = %d\n", errCode);
+
+
+//        wchar_t *s = NULL;
+//        FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+//               NULL, WSAGetLastError(),
+//               MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+//               (LPWSTR)&s, 0, NULL);
+//        fprintf(stderr, "%S\n", s);
+
+        if (buffer[0] != 'r')
+            printf("OPasiekė toks:  %s.\n", buffer);
+        printf ("ERROR 2, res = %d\n", res);
+		if (res != 0)
             return true;
         else
             disconnect(cli);
-	}
-	return (false);
+    }
+	printf ("ERROR 1, res = %d\n", res);
+	return false;
 }
 
 void accept_clients()
@@ -250,7 +274,6 @@ void accept_clients()
 			{
                 printf("Client connected!\n");
 			}
-
 		}
 	}
 }
@@ -261,7 +284,7 @@ void disconnect(struct Client *cli) //this is called by the low level funtions
         closesocket(cli->c_socket);
 	cli->connected = false;
 	cli->i = -1;
-	printf("Client disconnected");
+	printf("Client disconnected.\n");
 }
 
 void chat_message(char *s)          // send a message to all chat participants
@@ -279,28 +302,41 @@ void chat_message(char *s)          // send a message to all chat participants
 
 void recv_client()
 {
-	char buffer[BUFFLEN];
+    char buffer[BUFFLEN];
 
 	for(int i = 0; i<MAXCLIENTS; i++)
 	{
 		if(client[i].connected)		//valid slot,i.e a client has parked here
 		{
+            memset(&buffer, 'r', BUFFLEN);
+		    //buffer[0] = '\n';
 			if(my_recv(&client[i], buffer, BUFFLEN))
 			{
+			    //printf("OPasiekė:  %s.\n", bufferr);
 				if(buffer[0]=='/')
 				{
 					//respond to commands
 					if(strcmp(buffer,"/server_bang")==0)
 					{
+					    //printf("Received: %s", buffer);
 						chat_message("8*8* The Server Goes BANG *8*8");
 					}
 				}
-				else
+				else if (buffer[0] != '\n')
 				{
+				    //printf("Received 01: %s", buffer);
 					chat_message(buffer);
 				}
 			}
 		}
 	}
 }
-
+/*void error_check()
+{
+            wchar_t *s = NULL;
+        FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+               NULL, WSAGetLastError(),
+               MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+               (LPWSTR)&s, 0, NULL);
+        fprintf(stderr, "%S\n", s);
+}*/

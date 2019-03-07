@@ -70,7 +70,7 @@ fgets(buffer, BUFFLEN, stdin);
 
 //send message to server
 send(s_socket, buffer, strlen(buffer), 0);
-
+printf("Sent: : %s", buffer);
 memset(&buffer, 0, BUFFLEN);
 
 //get message from server
