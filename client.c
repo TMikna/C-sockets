@@ -69,7 +69,7 @@ printf ("Enter the message: ");
 fgets(buffer, BUFFLEN, stdin);
 
 //send message to server
-send(s_socket, buffer, strlen(buffer), 0);
+send(s_socket, buffer, sizeof(buffer), 0);
 printf("Sent: : %s", buffer);
 memset(&buffer, 0, BUFFLEN);
 
@@ -79,6 +79,7 @@ printf ("Server sent: %s\n", buffer);
 
 //close the socket
 close(s_socket);
+WSACleanup();
 return 0;
 }
 

@@ -76,13 +76,13 @@ if (connect(s_socket, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0)
     exit(1);
 }
 
-memset(&sendbuffer, 0, BUFFLEN);
-sendbuffer[0] = '\n';
+memset(&sendbuffer, '\n', BUFFLEN);
 int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
 memset(&sendbuffer, 0, BUFFLEN);
 
-//fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);   // works with file descriptors
-
+unsigned long b=1;
+ioctlsocket(s_socket,FIONBIO,&b);
+//fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);   // non blocking mode, linux
 //for (;;)
 
 /*    FD_ZERO(&read_set);
@@ -111,30 +111,33 @@ memset(&sendbuffer, 0, BUFFLEN);
         int n = 0;
         printf ("\n");
 
-    //    while ((sendbuffer[n++] = getchar()) != '\n');
-    //    if (n>0){
-        fgets(sendbuffer, BUFFLEN, stdin);
+        while ((sendbuffer[n++] = getchar()) != '\n');
+        if (n>0)
+        {
+    //    fgets(sendbuffer, BUFFLEN, stdin);
         printf("you wrote : %s\n", sendbuffer);
 
+    //    if (sendbuffer[0] != '\n')
+    //    {
+            int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
+             int errCode = WSAGetLastError();
+            printf("res =  %d.\n", res);
+ /*           if(res <= 0)
+            {
 
-        int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
-        if(res <= 0)
-		{
-		    wchar_t *s = NULL;
-        FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-               NULL, WSAGetLastError(),
-               MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-               (LPWSTR)&s, 0, NULL);
-        fprintf(stderr, "%S\n", s);
-			//0==other side terminated conn
-			printf("res =  %d.\n", res);
-			printf("\nSocket error happened or SERVER terminated connection\n");
-			close(s_socket);
-			s_socket = 0;
-			break;
-		}
-        memset(sendbuffer, 0, BUFFLEN);
 
+        fprintf (stderr, "WSAGetLastError errCode = %d\n", errCode);
+
+                //0==other side terminated conn
+                printf("res =  %d.\n", res);
+                printf("\nSocket error happened or SERVER terminated connection\n");
+                close(s_socket);
+                s_socket = 0;
+                break;
+            }
+            */
+            memset(sendbuffer, '\n', BUFFLEN);
+        }
 
         if ((length = read(s_socket, recvbuffer, sizeof(recvbuffer))) > 0)
             printf("Server: \n%s\n", recvbuffer);
@@ -169,6 +172,7 @@ memset(&sendbuffer, 0, BUFFLEN);
 
 //close the socket
 close(s_socket);
+WSACleanup();
 return 0;
 }
 

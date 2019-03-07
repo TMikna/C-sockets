@@ -11,7 +11,7 @@ Tomas Mikna
 #include <unistd.h>
 #include <stdbool.h>
 
-#define BUFFLEN 100
+#define BUFFLEN 1024
 #define MAXCLIENTS 10
 
 struct Client
@@ -203,6 +203,7 @@ int main(int argc, char *argv [])
 */
     }
 
+    WSACleanup();
     return 0;
 }
 
@@ -236,7 +237,7 @@ int my_recv(struct Client *cli, char *buffer, int sz)
 {
 
     int res;
-    printf ("ERROR 1, res = %d\n", res);
+    select(cli -> c_socket + 1, &cli->fdset, NULL, NULL, NULL);
 	if(FD_ISSET(cli->c_socket,&cli->fdset))
 	{
         res = recv(cli->c_socket, buffer, sizeof(buffer), 0);
@@ -252,7 +253,7 @@ int my_recv(struct Client *cli, char *buffer, int sz)
 //               (LPWSTR)&s, 0, NULL);
 //        fprintf(stderr, "%S\n", s);
 
-        if (buffer[0] != 'r')
+        if (buffer[0] != '\n')
             printf("OPasiekė toks:  %s.\n", buffer);
         printf ("ERROR 2, res = %d\n", res);
 		if (res != 0)
@@ -308,8 +309,8 @@ void recv_client()
 	{
 		if(client[i].connected)		//valid slot,i.e a client has parked here
 		{
-            memset(&buffer, 'r', BUFFLEN);
-		    //buffer[0] = '\n';
+            memset(&buffer, 0, BUFFLEN);
+		    buffer[0] = '\n';
 			if(my_recv(&client[i], buffer, BUFFLEN))
 			{
 			    //printf("OPasiekė:  %s.\n", bufferr);
