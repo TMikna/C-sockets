@@ -9,9 +9,19 @@ Tomas Mikna
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define BUFFLEN 1024
 #define MAXCLIENTS 10
+
+struct Client
+{
+    bool connected;    // true if client is connected
+    struct sockaddr_in addr;  // client info
+    int c_socket;      // client socket
+    fd_set fdset;      // used to check if there is data in the socket
+    int i;             // any additional info
+};
 
 int findemptyuser(int c_sockets[])
 {
@@ -19,7 +29,19 @@ int findemptyuser(int c_sockets[])
         if (c_sockets[i] == -1)
             return i;
     return -1;
-}
+};
+
+int my_accept (struct Client *cli);
+int my_send (struct Client *cli, char *buffer,int sz);
+int my_recv(struct Client *cli, char *buffer, int sz);
+void accept_clients();
+void disconnect(struct Client *cli); //this is called by the low level funtions
+void chat_message(char *s);          // send a message to all chat participants
+void recv_client();
+
+
+int l_socket; //Server address structure
+struct Client client[MAXCLIENTS]; // client socket structure
 
 int main(int argc, char *argv [])
 {
@@ -27,16 +49,16 @@ int main(int argc, char *argv [])
 
     unsigned int port;
     unsigned int clientaddrlen;
-    int l_socket; //Server address structure
-    int c_sockets[MAXCLIENTS]; // client socket structure
-    fd_set read_set;
+
+ //   int c_sockets[MAXCLIENTS]; // client socket structure //unused
+ //   fd_set read_set;
 
     struct sockaddr_in servaddr; // Serverio adreso struktûra
-    struct sockaddr_in clientaddr; //client addrest struct
+ //   struct sockaddr_in clientaddr; //client addrest struct
     // int clientaddrlen;
     //socklen_t clientaddrlen;
 
-    int maxfd = 0;
+ //   int maxfd = 0;
     int i;
 
  //   int s_len;
@@ -58,9 +80,11 @@ int main(int argc, char *argv [])
         return -1;
     }
 
-    WSAStartup(MAKEWORD(2,2), &data);  // initiates use of the Winsock DLL by a process.
-    //creating server socket    
-    
+    int res = WSAStartup(MAKEWORD(2,2), &data);  // initiates use of the Winsock DLL by a process.
+    if(res != 0)
+		fprintf(stderr, "ERROR: WSAStarup failed");
+
+
     //Isvaloma ir uzpildoma serverio adreso struktûra
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET; //choose protocol - IP
@@ -73,13 +97,6 @@ int main(int argc, char *argv [])
         return -1;
         //exit(1);
     }
-
-
-
-        /*
-     * Nurodomas IP adresas, kuriuo bus laukiama klientø, ðiuo atveju visi
-     * esami sistemos IP adresai (visi interfeis'ai)
-     */
 
 
     //Serverio adresas susiejamas su socket'u
@@ -100,12 +117,19 @@ int main(int argc, char *argv [])
         return -1;
     }
 
-    for (i = 0; i < MAXCLIENTS; i++)
-        c_sockets[i] = -1;
+    unsigned long b=1;
+	ioctlsocket(l_socket,FIONBIO,&b); // set non-blocking mode (b=1), that means functions return even if they got no response
+
+
+ //   for (i = 0; i < MAXCLIENTS; i++)
+ //       c_sockets[i] = -1;
 
     for(;;)
     {
-        FD_ZERO(&read_set);
+        accept_clients();
+        recv_client();
+
+/*        FD_ZERO(&read_set);
         for(i = 0; i < MAXCLIENTS; i++)
             if (c_sockets[i] != -1)
             {
@@ -153,7 +177,7 @@ int main(int argc, char *argv [])
                             }
                         }
                 }
-
+*/
 /*        //Isvalomas buferis ir kliento adreso struktûra
         memset(&clientaddr, 0, sizeof(clientaddr));
         memset(&buffer, 0, sizeof(buffer));
@@ -180,5 +204,103 @@ int main(int argc, char *argv [])
     }
 
     return 0;
+}
+
+int my_accept (struct Client *cli)
+    {
+        struct sockaddr x;
+        cli -> i = sizeof(struct sockaddr);
+        if((cli -> c_socket = accept(l_socket, (struct sockaddr*)&cli -> addr, &cli->i)) >= 0)
+        {
+            cli->connected = true;
+            FD_ZERO(&cli->fdset);
+            FD_SET(cli->c_socket, &cli->fdset);
+            return true;
+        }
+        return false;
+    }
+
+int my_send(struct Client *cli, char *buffer, int sz)
+{
+    if (send(cli->c_socket,buffer,sz,0) != 0);
+        return true;
+    disconnect(cli);
+    return false;
+}
+
+int my_recv(struct Client *cli, char *buffer, int sz)
+{
+	if(FD_ISSET(cli->c_socket,&cli->fdset))
+	{
+		if (recv(cli->c_socket,buffer,sz,0) != 0)
+            return true;
+        else
+            disconnect(cli);
+	}
+	return (false);
+}
+
+void accept_clients()
+{
+	for(int i=0; i<MAXCLIENTS; i++)
+	{
+		if(!client[i].connected)		//i.e a client has not connected to this slot
+		{
+			if(my_accept(&client[i]))  // ar tikrai reikia &?
+			{
+                printf("Client connected!\n");
+			}
+
+		}
+	}
+}
+
+void disconnect(struct Client *cli) //this is called by the low level funtions
+{
+	if(cli->c_socket)
+        closesocket(cli->c_socket);
+	cli->connected = false;
+	cli->i = -1;
+	printf("Client disconnected");
+}
+
+void chat_message(char *s)          // send a message to all chat participants
+{
+	int len = strlen(s);
+
+	for(int i=0; i<MAXCLIENTS; i++)
+	{
+		if(client[i].connected)		//valid slot,i.e a client has parked here
+		{
+			my_send(&client[i],s,len);
+		}
+	}
+}
+
+void recv_client()
+{
+	char buffer[BUFFLEN];
+
+	for(int i = 0; i<MAXCLIENTS; i++)
+	{
+		if(client[i].connected)		//valid slot,i.e a client has parked here
+		{
+			if(my_recv(&client[i], buffer, BUFFLEN))
+			{
+				if(buffer[0]=='/')
+				{
+					//respond to commands
+					if(strcmp(buffer,"/server_bang")==0)
+					{
+						chat_message("8*8* The Server Goes BANG *8*8");
+					}
+				}
+				else
+				{
+					chat_message(buffer);
+				}
+			}
+		}
+	}
 }
 
