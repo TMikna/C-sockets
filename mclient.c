@@ -2,13 +2,21 @@
 Tomas Mikna
 */
 
+#ifdef _WIN32
 #include <winsock2.h>
+#define socklen_t int
+#else
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <stdbool.h>
 #include <fcntl.h>
 
 #define BUFFLEN 1024
@@ -83,27 +91,30 @@ memset(&sendbuffer, 0, BUFFLEN);
 unsigned long b=1;
 ioctlsocket(s_socket,FIONBIO,&b);
 //fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);   // non blocking mode, linux
-//for (;;)
-
-/*    FD_ZERO(&read_set);
+for (;;)
+{
+    FD_ZERO(&read_set);
     FD_SET(s_socket, &read_set);
     FD_SET(0, &read_set);
 
     select(s_socket + 1, &read_set, NULL, NULL, NULL);
 
-    if (FD_ISSET(s_socket, &read_set))
-    {
-        memset(&recvbuffer, 0, BUFFLEN);
-        i = recv(s_socket, recvbuffer, BUFFLEN, 0);
-        printf("%s nonono\n", recvbuffer);
-    }
     if (FD_ISSET(0, &read_set))
     {
         //i = read(0, &sendbuffer, 1);
         fgets(sendbuffer, BUFFLEN, stdin);
         send(s_socket, sendbuffer, strlen(sendbuffer), 0);
     }
-*/
+
+    if (FD_ISSET(s_socket, &read_set))
+    {
+        memset(&recvbuffer, 0, BUFFLEN);
+        int i = recv(s_socket, recvbuffer, BUFFLEN, 0);
+        printf("Server: %s\n", recvbuffer);
+    }
+
+}
+/*
     printf("Write your message or press enter \n");
 
     for (;;)
@@ -119,10 +130,12 @@ ioctlsocket(s_socket,FIONBIO,&b);
 
     //    if (sendbuffer[0] != '\n')
     //    {
-            int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
-             int errCode = WSAGetLastError();
+            int res = 0;
+            while (res != sizeof(sendbuffer) && res != -1)
+                res += write(s_socket, sendbuffer, sizeof(sendbuffer));
+            int errCode = WSAGetLastError();
             printf("res =  %d.\n", res);
- /*           if(res <= 0)
+            if(res <= 0)
             {
 
 
@@ -135,7 +148,7 @@ ioctlsocket(s_socket,FIONBIO,&b);
                 s_socket = 0;
                 break;
             }
-            */
+
             memset(sendbuffer, '\n', BUFFLEN);
         }
 
@@ -157,7 +170,7 @@ ioctlsocket(s_socket,FIONBIO,&b);
 
         memset(recvbuffer, 0, sizeof(recvbuffer));
     }
-
+*/
 //printf ("Enter the message: ");
 //fgets(buffer, BUFFLEN, stdin);
 

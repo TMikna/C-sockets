@@ -2,13 +2,21 @@
 Tomas Mikna
 */
 
-#include <winsock.h>
+#ifdef _WIN32
+#include <winsock2.h>
 #define socklen_t int
+#else
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <netdb.h>
 #include <stdbool.h>
 
 #define BUFFLEN 1024
@@ -42,6 +50,7 @@ void recv_client();
 
 int l_socket; //Server address structure
 struct Client client[MAXCLIENTS]; // client socket structure
+fd_set fdset;
 
 int main(int argc, char *argv [])
 {
@@ -73,6 +82,7 @@ int main(int argc, char *argv [])
     }
 
     port = atoi(argv[1]);
+
 
     if (port < 1 || port > 65535)
     {
@@ -237,7 +247,6 @@ int my_recv(struct Client *cli, char *buffer, int sz)
 {
 
     int res;
-    select(cli -> c_socket + 1, &cli->fdset, NULL, NULL, NULL);
 	if(FD_ISSET(cli->c_socket,&cli->fdset))
 	{
         res = recv(cli->c_socket, buffer, sizeof(buffer), 0);
@@ -303,32 +312,49 @@ void chat_message(char *s)          // send a message to all chat participants
 
 void recv_client()
 {
+    int maxfd = 0;
     char buffer[BUFFLEN];
+    FD_ZERO(&fdset);
+    for(int i = 0; i < MAXCLIENTS; i++)
+        if (client[i].connected)
+            {
+                FD_SET(client[i].c_socket, &fdset);
+                if (client[i].c_socket > maxfd)
+                    maxfd = client[i].c_socket;
+            }
+        FD_SET(l_socket, &fdset);
+        if(l_socket > maxfd)
+            maxfd = l_socket;
+
+    select(maxfd + 1, &fdset, NULL, NULL, NULL);
 
 	for(int i = 0; i<MAXCLIENTS; i++)
 	{
 		if(client[i].connected)		//valid slot,i.e a client has parked here
 		{
-            memset(&buffer, 0, BUFFLEN);
-		    buffer[0] = '\n';
-			if(my_recv(&client[i], buffer, BUFFLEN))
-			{
-			    //printf("OPasiekė:  %s.\n", bufferr);
-				if(buffer[0]=='/')
-				{
-					//respond to commands
-					if(strcmp(buffer,"/server_bang")==0)
-					{
-					    //printf("Received: %s", buffer);
-						chat_message("8*8* The Server Goes BANG *8*8");
-					}
-				}
-				else if (buffer[0] != '\n')
-				{
-				    //printf("Received 01: %s", buffer);
-					chat_message(buffer);
-				}
-			}
+		    if (FD_ISSET(client[i].c_socket, &fdset))
+            {
+                memset(&buffer, 0, BUFFLEN);
+                buffer[0] = '\n';
+                if(my_recv(&client[i], buffer, BUFFLEN))
+                {
+                    //printf("OPasiekė:  %s.\n", bufferr);
+                    if(buffer[0]=='/')
+                    {
+                        //respond to commands
+                        if(strcmp(buffer,"/server_bang")==0)
+                        {
+                            //printf("Received: %s", buffer);
+                            chat_message("8*8* The Server Goes BANG *8*8");
+                        }
+                    }
+                    else if (buffer[0] != '\n')
+                    {
+                        //printf("Received 01: %s", buffer);
+                        chat_message(buffer);
+                    }
+                }
+            }
 		}
 	}
 }
