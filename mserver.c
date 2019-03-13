@@ -38,7 +38,7 @@ Tomas Mikna
 //     return -1;
 // };
 
-int receive_data(int c_sock, char *buffer[]);
+char* receive_data(int c_sock, fd_set *master);
 int accept_client(int l_socket, fd_set *master);
 void error_check();
 
@@ -57,7 +57,7 @@ int main(int argc, char *argv [])
 {
     WSADATA data;
 
-    char buffer[BUFFLEN];
+    char *buffer = malloc(sizeof(char)*BUFFLEN);
     fd_set master;    //master file descriptor list
     fd_set read_set;  //temp file descriptor list for select(), since select change set and we need to keep track of all connected sockets
     int maxfd = 0;    // maximum file descriptor number
@@ -169,12 +169,10 @@ int main(int argc, char *argv [])
                 else
                 {
                     int rec_len = 0;
-                    if ((rec_len = receive_data(i, &buffer)) <= 0)
-                    {
-                        printf ("rec_len = %d\n", rec_len);
-                        FD_CLR(i, &master);
-                    }
-                    else
+                    buffer = receive_data(i, &master);
+                    //memset (buffer, '\0', sizeof(char)*BUFFLEN);
+                    //recv(i, buffer, sizeof(buffer), 0);
+                    printf("receive_data grazino: %s\n", buffer);
                         for (int j = 0; j <= maxfd; j++)     //send for everyone
                             if (FD_ISSET(j, &master))
                                 if (j != l_socket && j != i) // except sender and listening socket
@@ -431,26 +429,32 @@ int accept_client(int l_socket, fd_set *master)
 // 	}
 // }
 
-int receive_data(int c_sock, char *buffer[])
+char* receive_data(int c_sock, fd_set *master)
 {
+    char *buffer = malloc(sizeof(char)*BUFFLEN);
     int len = 0;
+    int resp = 0;
 
-    if(len = recv(c_sock, buffer, sizeof(*buffer), 0) <= 0)
+    memset (buffer, '\0', sizeof(char)*BUFFLEN);
+
+    
+    if(len = recv(c_sock, buffer+resp, sizeof(buffer), 0) <= 0)
     {
-        printf("Message: %s", buffer);
+
         close(c_sock);
+        FD_CLR(c_sock, master);
         if (len == 0)
         {
             printf("Socket %d was closed by client\n", c_sock);
-            return 0;
         }
         else
         {
             perror("recv");
-            return -1;
         }
     }
-    return len;
+
+    printf("Message: %s", buffer);
+    return buffer;
 }
 
 void error_check()
