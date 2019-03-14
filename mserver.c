@@ -28,8 +28,9 @@ void error_check();
 
 int main(int argc, char *argv [])
 {
+    #ifdef _WIN32
     WSADATA data;
-
+    #endif // _WIN32
     char *buffer = malloc(sizeof(char)*BUFFLEN);
     char *sendbuffer = malloc(sizeof(char)*BUFFLEN);
     fd_set master;    //master file descriptor list
@@ -45,7 +46,6 @@ int main(int argc, char *argv [])
     {
         fprintf (stderr, "USAGE: %s <port>\n", argv[0]);
         return -1;
-        //exit(1);
     }
 
     FD_ZERO(&master);  //clean both sets
@@ -109,15 +109,11 @@ int main(int argc, char *argv [])
     FD_SET(l_socket, &master);      //add the listener to the master set
     maxfd = l_socket;               //keep track of the biggest file descriptor
 
-
-
-
     for(;;)
     {
 
         read_set = master; // copy it
-        printf("read_set eelemts: %d\n", read_set.fd_count);
-        printf("maxfd: %d \n", maxfd);
+        printf("Vartotoju + serveris: %d\n", read_set.fd_count);
         if (select (maxfd + 1, &read_set, NULL, NULL, NULL) < 0)
         {
             perror("ERROR #6: select()");
@@ -136,40 +132,17 @@ int main(int argc, char *argv [])
                 else
                 {
                     buffer = receive_data(i, &master);
-                    //memset (buffer, '\0', sizeof(char)*BUFFLEN);
-                    //recv(i, buffer, sizeof(buffer), 0);
-                    printf("receive_data grazino: %s\n", buffer);
                         for (int j = 0; j <= maxfd; j++)     //send for everyone
                         {
                             send_message(buffer,j , l_socket, i, &master);
-
-//                            int len = 0;
-//                            int total = strlen(buffer);
-//                            sendbuffer[0] = total;
-//                            strcpy(sendbuffer+1, buffer+1);  // because first number already is a number, thought counting again in case we lost some date despite trying to receive it all
-//
-//                           if (FD_ISSET(j, &master))
-//                                if (j != l_socket && j != i) // except sender and listening socket
-//                                     while (len < total)
-//                                        {
-//                                            int sent = 0;
-//                                            sent = send(j, sendbuffer+len, strlen(sendbuffer)-len, 0);
-//                                            if (sent < 0)
-//                                                perror("send");
-//                                            len += sent;
-//                                            printf("sent: %d, len:%d, total: %d\n",sent, len, total);
-//                                        }
                         }
-
                 }
-
             }
-
         }
-        printf ("FOREND\n");
     }
-
+    #ifdef _WIN32
     WSACleanup();
+    #endif // _WIN32
     return 0;
 }
 
@@ -192,7 +165,6 @@ int accept_client(int l_socket, fd_set *master)
 
     printf("New connection on socket %d.\n", new_fd);
 
-
     return new_fd;
 }
 
@@ -206,7 +178,6 @@ char* receive_data(int c_sock, fd_set *master)
 
     memset (buffer, '\0', sizeof(char)*BUFFLEN);
 
-
     if((len = recv(c_sock, buffer, sizeof(buffer)-1, 0)) <= 0)
     {
         close(c_sock);
@@ -217,23 +188,18 @@ char* receive_data(int c_sock, fd_set *master)
         }
         else
         {
-            perror("recv");
+            //perror("Recv");
         }
     }
     toget = buffer[0];
     total += len;
-    printf ("len: %d, total %d, toget: %d\n", len, total, toget);
     while (total < toget)
     {
         len = recv(c_sock, buffer+total, BUFFLEN-total-1, 0);
         if (len < 0)
             perror("recv");
         total += len;
-
-        printf ("len: %d, total %d\n", len, total);
     }
-
-    printf("Message: %s\n", buffer+1);
     return buffer;
 }
 
@@ -243,7 +209,6 @@ int send_message(char* buffer,int receiver, int l_socket, int sender, fd_set *ma
     char *sendbuffer = malloc(sizeof(char)*BUFFLEN);
     int len = 0;
     int total = strlen(buffer);
-    sendbuffer[0] = total;
     strcpy(sendbuffer+1, buffer+1);  // because first number already is a number, thought counting again in case we lost some date despite trying to receive it all
 
     if (FD_ISSET(receiver, master))
@@ -255,7 +220,6 @@ int send_message(char* buffer,int receiver, int l_socket, int sender, fd_set *ma
                     if (sent < 0)
                         perror("send");
                     len += sent;
-                    printf("sent: %d, len:%d, total: %d\n",sent, len, total);
                 }
 }
 
