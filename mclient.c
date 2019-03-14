@@ -12,6 +12,7 @@ Tomas Mikna
 #include <arpa/inet.h>
 #endif
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,11 @@ Tomas Mikna
 
 #define BUFFLEN 1024
 
+
+void *my_send (void *s_socket);
+void *my_receive (void *s_socket);
+
+
 int main(int argc, char *argv[])
 {
 WSADATA data;
@@ -28,7 +34,6 @@ WSADATA data;
 unsigned int port;
 int s_socket;
 struct sockaddr_in servaddr; //server address structure
-fd_set read_set;
 
 char recvbuffer[BUFFLEN];
 char sendbuffer[BUFFLEN];
@@ -84,36 +89,41 @@ if (connect(s_socket, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0)
     exit(1);
 }
 
-memset(&sendbuffer, '\n', BUFFLEN);
-int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
-memset(&sendbuffer, 0, BUFFLEN);
+printf ("Connected to server\n");
+//memset(&sendbuffer, '\n', BUFFLEN);
+//int res = write(s_socket, sendbuffer, sizeof(sendbuffer));
+//memset(&sendbuffer, 0, BUFFLEN);
 
-unsigned long b=1;
-ioctlsocket(s_socket,FIONBIO,&b);
+//unsigned long b=1;
+//ioctlsocket(s_socket,FIONBIO,&b);
 //fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);   // non blocking mode, linux
-for (;;)
-{
-    FD_ZERO(&read_set);
-    FD_SET(s_socket, &read_set);
-    FD_SET(0, &read_set);
 
-    select(s_socket + 1, &read_set, NULL, NULL, NULL);
+  pthread_t send_thread, receive_thread;
+  void *ret;
+  int *sock_ptr = malloc(sizeof(*sock_ptr));
+  *sock_ptr = s_socket;
 
-    if (FD_ISSET(0, &read_set))
-    {
-        //i = read(0, &sendbuffer, 1);
-        fgets(sendbuffer, BUFFLEN, stdin);
-        send(s_socket, sendbuffer, strlen(sendbuffer), 0);
-    }
+  if (pthread_create(&send_thread, NULL, my_send, (void*)&s_socket) != 0){
+    perror("pthread_create(send_thread)  error");
+    exit(1);
+  }
 
-    if (FD_ISSET(s_socket, &read_set))
-    {
-        memset(&recvbuffer, 0, BUFFLEN);
-        int i = recv(s_socket, recvbuffer, BUFFLEN, 0);
-        printf("Server: %s\n", recvbuffer);
-    }
+    if (pthread_create(&receive_thread, NULL, my_receive, (void*)&s_socket) != 0){
+        perror("pthread_create(receive_thread)  error");
+        exit(1);
+  }
 
-}
+    if (pthread_join(send_thread, NULL) != 0) {
+        perror("pthread_join(send_thread) error");
+        exit(3);
+  }
+
+    if (pthread_join(receive_thread, NULL) != 0) {
+        perror("pthread_join(receive_thread) error");
+        exit(3);
+  }
+
+
 /*
     printf("Write your message or press enter \n");
 
@@ -187,6 +197,77 @@ for (;;)
 close(s_socket);
 WSACleanup();
 return 0;
+}
+
+void *my_send (void *s_socket)
+{
+        int socket = *((int *)s_socket);
+        char sendbuffer[BUFFLEN];
+        char buffer[BUFFLEN-4];
+        int total, len;
+
+        for(;;)
+        {
+            memset(sendbuffer, '\0', sizeof(char)*BUFFLEN);
+            len = 0;
+            //fgets(sendbuffer, BUFFLEN, stdin);
+            printf("%s","> ");
+            scanf("%[^\n]%*c", buffer);
+            if (buffer[0] != '\n' || buffer[0] != '\0')
+            {
+                total = strlen(buffer)+1;
+                sendbuffer[0] = total;
+                strcpy(sendbuffer+1, buffer);
+
+                while (len < total)
+                {
+                    int sent = 0;
+                    sent = send(socket, sendbuffer+len, strlen(sendbuffer)-len, 0);
+                    if (sent < 0)
+                        perror("send");
+                    len += sent;
+                    printf("sent: %d, len:%d, total: %d\n",sent, len, total);
+                }
+            }
+        }
+}
+
+void *my_receive (void *s_socket)
+{
+    int socket = *((int *)s_socket);
+    char recvbuffer[BUFFLEN];
+    int i;
+
+    fd_set read_set;
+    FD_ZERO(&read_set);
+    FD_SET(socket, &read_set);
+    for (;;)
+    {
+
+
+        select(socket + 1, &read_set, NULL, NULL, NULL);
+        if (FD_ISSET(socket, &read_set))
+        {
+            memset(&recvbuffer, '\0', BUFFLEN);
+            if(i = recv(socket, recvbuffer, sizeof(char)*BUFFLEN-2, 0) <= 0)
+            {
+                close(socket);
+                if (i == 0)
+                {
+                    printf("Socket %d was closed by client\n", socket);
+                    exit(0);
+                }
+                else
+                {
+                    perror("recv");
+                    exit(1);
+
+                }
+            }
+            printf("Server: %s\n", recvbuffer);
+        }
+
+    }
 }
 
 
